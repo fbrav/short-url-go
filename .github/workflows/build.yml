@@ -1,9 +1,7 @@
 name: Build Windows Binary
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch:  # 只允许手动触发
 
 jobs:
   build-windows:
@@ -16,7 +14,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.13.15'
+          go-version: '1.21'
 
       - name: Build Windows amd64
         env:
