@@ -1,117 +1,34 @@
-name: 编译shortener
+name: Build Windows Binary
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      upx:
-        description: '编译完成后是否使用upx压缩体积'
-        required: true
-        default: false
-        type: boolean
-      rel:
-        description: '编译完成后是否发布releases'
-        required: true
-        default: false
-        type: boolean
-
-env:
-  TZ: Asia/Shanghai
-
-permissions:
-  contents: write
-  actions: write
 
 jobs:
- shortener:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - GOARCH: amd64 
-            GOOS: windows
-            NAME: windows-amd64
+  build-windows:
     runs-on: ubuntu-latest
-    env:
-      GOarch: ${{ matrix.GOARCH }}
-      GOos: ${{ matrix.GOOS }}
-      GOarm: ${{ matrix.GOARM }}
-      GOmips: ${{ matrix.GOMIPS }}
-      NAME: ${{ matrix.NAME }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-      - name: 获取最新Go
-        run: |
-          latest_version=$(curl -L -k -s https://golang.org/dl/?mode=json | grep -m 1 -o '"version": "[^"]*' | sed 's/"version": "//' | tr -d 'go" ')
-          echo "go版本=$latest_version"
-          echo "gotag=$latest_version" >> $GITHUB_ENV
-      - name: 安装go
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.gotag }}
-      - name: 开始编译
+          go-version: '1.21'
+
+      - name: Build Windows amd64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 0
         run: |
-            sudo timedatectl set-timezone "Asia/Shanghai"
-            export CGO_ENABLED=0
-            export GOOS=$GOos
-            export GOARCH=$GOarch
-            export GOARM=$GOarm
-            export GOMIPS=$GOmips
-            go build -ldflags="-s -w"
-            echo "shortener ：`ls -alh shortener | awk '{print $5}'`"
-            file shortener
-            mv -f shortener /opt/shortener-${NAME}
-            echo "build_time=$(date '+%Y年%m月%d日%H:%M:%S' | jq -sRr @uri)" >> $GITHUB_ENV
-            echo "build_tag=$(date '+%Y-%m-%d')" >> $GITHUB_ENV
-      - name: 安装 UPX
-        if: github.event.inputs.upx == 'true'
-        uses: crazy-max/ghaction-upx@v3
-        with:
-          version: v4.2.4
-          install-only: true
-      - name: UPX压缩
-        if: github.event.inputs.upx == 'true' 
-        run: |
-          if [ "${GOos}" != "freebsd" ] && [ "${GOarch}" != "mips64" ] && [ "${GOarch}" != "mips64le" ] && [ "${GOarch}" != "ppc64le" ] && [ "${GOarch}" != "s390x" ]; then
-             upx --lzma --best /opt/shortener-${NAME}
-          fi
-          
-      - name: 上传
+          mkdir -p dist
+          go build -o dist/short-url-go-windows-amd64.exe
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shortener-${{ matrix.NAME }}
-          path: /opt/shortener-${{ matrix.NAME }}
-
- release:
-    name: 统一发布 Release
-    needs: shortener
-    runs-on: ubuntu-latest
-    if: github.event.inputs.rel == 'true'
-    steps:
-      - name: 下载所有编译产物
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: 整理文件
-        run: |
-          ls -R dist
-          mkdir -p release
-          find dist -type f -exec mv {} release/ \;
-          chmod +x release/*
-
-      - name: 设置版本信息
-        run: |
-          echo "build_time=$(date '+%Y年%m月%d日%H:%M:%S' | jq -sRr @uri)" >> $GITHUB_ENV
-          echo "build_tag=$(date '+%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: 发布 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.build_tag }}
-          name: Version:${{ env.build_tag }}
-          body: |
-            > ### ![](https://img.shields.io/badge/%E7%BC%96%E8%AF%91%E6%97%B6%E9%97%B4-${{ env.build_time }}-8267?logo=github&labelColor=%E9%A1%BB)![](https://img.shields.io/github/downloads/${{ github.repository }}/${{ env.build_tag }}/total?label=%E4%B8%8B%E8%BD%BD%E6%AC%A1%E6%95%B0&logo=github) 
-           
-          files: release/*
+          name: short-url-go-windows
+          path: dist/short-url-go-windows-amd64.exe
