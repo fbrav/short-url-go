@@ -3642,7 +3642,7 @@ func runAsDaemon() {
 	case "linux", "freebsd":
 		if os.Getppid() != 1 {
 			cmd := exec.Command(os.Args[0], os.Args[1:]...)
-			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+			setSysProcAttr(cmd)
 			cmd.Stdout, cmd.Stderr, cmd.Stdin = nil, nil, nil
 			
 			// 显式传递环境变量  
